@@ -62,6 +62,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
+            #gen new random data every 2 seconds
             new_data = {
                 "fridge_id": random.randint(1, 3),
                 "instrument_name": random.choice(["instrument_one", "instrument_two", "instrument_three", "instrument_four", "instrument_five"]),
