@@ -1,8 +1,8 @@
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import random
 import json
 import asyncio
@@ -17,6 +17,7 @@ class Fridge(BaseModel):
 
 class Fridges(BaseModel):
     fridges: List[Fridge]
+    total: int
 
 app = FastAPI()
 origins = ["http://localhost:3000"]
@@ -40,9 +41,51 @@ memory_db = {"fridges": [
             ]
 }
 
+def generate_historical_data(count):
+    instrument = ["instrument_one", "instrument_two", "instrument_three", "instrument_four", "instrument_five"]
+    param = ["flux_bias", "temperature", "power_level", "current_bias", "voltage"]
+    timey = int(time.time()) - (count * 3600)
+
+    for i in range(count):
+        memory_db["fridges"].append({
+            "fridge_id": random.randint(1, 3),
+            "instrument_name": random.choice(instrument),
+            "parameter_name": random.choice(param),
+            "applied_value": round(random.uniform(-2.0, 2.0), 2),
+            "timestamp": timey + (i * 3600)
+        })
+
+generate_historical_data(100)
+
+
 @app.get("/fridges", response_model=Fridges)
-def get_fridges():
-    return Fridges(fridges=memory_db["fridges"])
+
+# get fridges now is versatile for pagination or websocket
+def get_fridges(page: int = Query(1,ge=1, description="page number"), 
+                limit: int = Query(10, ge=1,le=100,description="items per page"),
+                fridge_id: Optional[int] = None,
+                instrument_name: Optional[str] = None,
+                parameter_name: Optional[str] = None):
+
+    filtered_fridges = memory_db["fridges"]
+    
+    #filter out fridges
+    if fridge_id is not None: filtered_fridges = [f for f in filtered_fridges if f["fridge_id"] == fridge_id]
+    if instrument_name: filtered_fridges = [f for f in filtered_fridges if instrument_name.lower() in f["instrument_name"].lower()]
+    if parameter_name: filtered_fridges = [f for f in filtered_fridges if parameter_name.lower() in f["parameter_name"].lower()]
+
+    #print("filtered: "filtered_fridges)
+
+    #sort by timestamp
+    filtered_fridges = sorted(filtered_fridges, key=lambda x: x["timestamp"], reverse=True)
+
+    total = len(filtered_fridges)
+    start = (page - 1) * limit
+    end = start + limit
+    paginated_data = filtered_fridges[start:end]
+    
+    return Fridges(fridges=paginated_data, total=total)
+
 
 # @app.post("/fridges")
 # def add_fridge(fridge: Fridge):
@@ -76,10 +119,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 await client.send_text(json.dumps(new_data))
             print("sent data")
 
-            await asyncio.sleep(2) #async sleep instead of time.sleep
+            await asyncio.sleep(1) #async sleep instead of time.sleep
     except WebSocketDisconnect:
-        print("errorororor")
+        print("web socket disconnected!")
         clients.remove(websocket)
+
+
 
 #Runs application
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
 fastapi
 uvicorn
 pydantic
+#pip install 'uvicorn[standard]'
