@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback} from "react";
 import api from "@/utils/api"; 
+import Navbar from "@/components/Navbar";
 
-
+// Structure for the Fridge and the responses from the endpoint
 type Fridge = {
   fridge_id: number;
   instrument_name: string;
@@ -15,11 +16,10 @@ type FridgeResponse = {
 }
 
 export default function Home() {
-  // state variables
-  //useeffect and api request .then .cache
-  const [fridges, setFridges] = useState<Fridge[]>([]); //fridge data
-  const [filteredFridges, setFilteredFridges] = useState<Fridge[]>([]); // filtered data
-  const [filters, setFilters] = useState({ //filters to be used
+  // State Variables
+  const [fridges, setFridges] = useState<Fridge[]>([]); //Fridge data
+  const [filteredFridges, setFilteredFridges] = useState<Fridge[]>([]); // Filtered data
+  const [filters, setFilters] = useState({ //Filters to be used
     fridgeId: "",
     instrumentName: "",
     parameterName: "",
@@ -30,30 +30,32 @@ export default function Home() {
   const [hasMore, setHasMore] = useState(true); //is there more data
   const [totalRecords, setTotalRecords] = useState(0); // how many records are there
 
-  // obserber detects if last page is in view
+  // Intersection observer is used for infite scrolling
   const observer = useRef<IntersectionObserver | null>(null);
-  const lastFridgeElementRef = useCallback((node: HTMLTableRowElement | null) => { //last eleemnt
+  const lastFridgeElementRef = useCallback((node: HTMLTableRowElement | null) => { // detect when last fridge element is visible
     if (loading) return;
     if (observer.current) observer.current.disconnect(); //no other observers
 
-    //checks for more data
+    //New observer to track if last element is visible
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !liveMode) {
         setPage(prevPage => prevPage + 1);
       }
     });
 
-    if (node) observer.current.observe(node);
+    if (node) observer.current.observe(node); //Observer on the last element
   }, [loading, hasMore, liveMode]);
 
+  // Fetch the fridge data from the API endpoint
   const fetchFridges = useCallback(async (pageNum:number) => {
     try {
       setLoading(true);
 
       const params = new URLSearchParams();
       params.append('page', pageNum.toString());
-      params.append('limit', '20');
-
+      params.append('limit', '20'); // Fetches 20 items per request
+      
+      // Adds filters
       if (filters.fridgeId && !isNaN(parseInt(filters.fridgeId))) {
         params.append('fridge_id', filters.fridgeId);
       }
@@ -61,19 +63,20 @@ export default function Home() {
       if (filters.instrumentName) params.append('instrument_name', filters.instrumentName);
       if (filters.parameterName) params.append('parameter_name', filters.parameterName);
 
-      const response = await api.get<FridgeResponse>(`/fridges?${params.toString()}`);
-      
+      //Request API endpoint
+      const response = await api.get<FridgeResponse>(`/settings?${params.toString()}`);
+      //update Records
       setTotalRecords(response.data.total);
       
       if (pageNum === 1) {
-        // replace the exisitng data since they are NOT scorlling
+        // replace the exisitng data since they are NOT scrolling
         setFridges(response.data.fridges);
       } else {
         // append data since they ARE scrolling
         setFridges(prev => [...prev, ...response.data.fridges]);
       }
       
-      // Check if end
+      // Check if more pages exist or if it is the end
       setHasMore(pageNum * 20 < response.data.total);
     } catch (error) {
       console.error("error w frige getching", error);
@@ -89,37 +92,34 @@ export default function Home() {
     }
   }, [page, filters, liveMode, fetchFridges]);
 
-  //if filteres are applied
+  //If filteres are applied reset to page 1
   useEffect(() => {
     setPage(1);
   }, [filters]);
 
 
-  //websocket connection
+  //Websocket connection to ensure live and realtime updates
   useEffect(() => {
     if (!liveMode) return;
-
-    //cleras data from the historical data
-    // setFridges([]);
-    // fetchFridges(1);
     const socket = new WebSocket("ws://localhost:8000/ws");
     
-
+    // Confirm socket connection
     socket.onopen = () => {
       console.log("connecetd ");
     };
 
-    //when message is recieved add the new data
+    //When message is recieved add the new data
     socket.onmessage = (event) => {
       console.log("received msg", event.data)
       const newData: Fridge = JSON.parse(event.data);
       setFridges((prevFridges) => [newData, ...prevFridges.slice(0, 99)]);
     };
 
+    // Socket error?
     socket.onerror = (error) => {
       console.error("error: ", error);
     }
-
+    // confirm socket closed
     socket.onclose = () => {
       console.log("connection closed");
     }
@@ -147,6 +147,7 @@ export default function Home() {
     );
   }, [filters, fridges]);
 
+  // Switch between live mode and pagination
   const toggleLiveMode = () => {
     if (liveMode){
       setPage(1);
@@ -159,7 +160,7 @@ export default function Home() {
     setLiveMode(prev => !prev);
   }
 
-  // if filter val is changed
+  // If the filters state changes update
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilters({
       ...filters,
@@ -167,7 +168,7 @@ export default function Home() {
     });
   };
 
-  //clear filters
+  // Clear Filters
   const clearFilters = () => {
     setFilters({
       fridgeId: "",
@@ -175,12 +176,12 @@ export default function Home() {
       parameterName: "",
     })
   }
-
-
-
   
   return (
     <div>
+      {/*navigation bar */}
+      <Navbar />
+      {/*Fitler bar */}
       <div className="w-full mb-4 p-4 bg-gray-50 shadow-sm">
         <h2 className="text-2xl font-semibold">Filter Fridges</h2>
         
@@ -225,7 +226,7 @@ export default function Home() {
             />
           </div>
         </div>
-
+        {/*Clear Filters and Live Mode Buttons */}
         <div className="mt-3 flex justify-between">
           <button
             onClick={clearFilters}
@@ -247,6 +248,7 @@ export default function Home() {
 
         </div>
       </div>
+      {/*Text if Live Mode is activated */}
       {liveMode && (
         <div>
           <p className="text-sm font-medium bg-amber-200">
@@ -254,7 +256,7 @@ export default function Home() {
           </p>
         </div>
       )}
-
+      {/*Table to display all the fridges*/}
       <div className = "flex justify-center">
         <table className="w-4/5 border-collapse border border-black">
           <thead>
@@ -292,6 +294,7 @@ export default function Home() {
 
         
       </div>
+      {/*Reached bottom of pagination*/}
       {!hasMore && !liveMode && filteredFridges.length > 0 && (
           <div className="text-center my-4 text-gray-500">
             You've reached the end of the data!!
