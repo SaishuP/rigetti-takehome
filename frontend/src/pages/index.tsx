@@ -31,6 +31,36 @@ export default function Home() {
       })
   }, []);
 
+  //websocket connection
+  useEffect(() => {
+    const socket = new WebSocket("ws://localhost:8000/ws");
+    
+    socket.onopen = () => {
+      console.log("connecetd ");
+    };
+
+    //when message is recieved add the new data
+    socket.onmessage = (event) => {
+      console.log("received msg", event.data)
+      const newData: Fridge = JSON.parse(event.data);
+      setFridges((prevFridges) => [...prevFridges, newData]);
+    };
+
+    socket.onerror = (error) => {
+      console.error("error: ", error);
+    }
+
+    socket.onclose = (error) => {
+      console.log("connection closed");
+    }
+
+    return () => {
+      console.log("clsoing connection");
+      socket.close();
+    }
+  }, []);
+
+
   // Filter Fridges
   useEffect(() => {
     setFilteredFridges(
@@ -44,6 +74,8 @@ export default function Home() {
     );
   }, [filters, fridges]);
 
+
+  // if filter val is changed
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilters({
       ...filters,
@@ -51,6 +83,7 @@ export default function Home() {
     });
   };
 
+  //clear filters
   const clearFilters = () => {
     setFilters({
       fridgeId: "",
@@ -58,6 +91,8 @@ export default function Home() {
       parameterName: "",
     })
   }
+
+
   return (
     <div>
       <div className="w-full mb-4 p-4 bg-gray-50 shadow-sm">
